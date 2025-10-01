@@ -329,36 +329,69 @@ class Llama(LlamaPreTrainedModel):
 
 
 def load_pretrained(checkpoint):
-    device = (
-        "cuda" if torch.cuda.is_available() else "cpu"
-    )  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
-    # dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
-    dtype = "float32"
+    """
+    Loads a pretrained model from a checkpoint, automatically selecting the
+    best available device (MPS, CUDA, or CPU).
+    """
+    # 1. Device and dtype configuration
+    # Check for MPS (Apple Silicon GPU), then CUDA, and finally fallback to CPU.
+    if torch.backends.mps.is_available():
+        device = "mps"
+    elif torch.cuda.is_available():
+        device = "cuda"
+    else:
+        device = "cpu"
 
-    torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
-    torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
-    device_type = (
-        "cuda" if "cuda" in device else "cpu"
-    )  # for later use in torch.autocast
+    # Set dtype. Note: bfloat16 is not supported on MPS.
+    # float16 can provide a performance boost on MPS.
+    dtype = "float16" if device == "mps" else "float32"
+
+    print(f"Using device: {device} with dtype: {dtype}")
+
+    # 2. CUDA-specific backend settings (optional but good practice)
+    # These have no effect if CUDA is not available.
+    if torch.cuda.is_available():
+        torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+        torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
+
+    # 3. Autocast context manager setup
+    # device_type can now be 'cuda', 'mps', or 'cpu'.
+    device_type = device
     ptdtype = {
         "float32": torch.float32,
         "bfloat16": torch.bfloat16,
         "float16": torch.float16,
     }[dtype]
+
     ctx = (
         nullcontext()
         if device_type == "cpu"
         else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
     )
 
+    # 4. Model loading
     # init from a model saved in a specific directory
     checkpoint_dict = torch.load(checkpoint, map_location=device)
+
+    # Assuming the checkpoint contains model_args needed for LlamaConfig
+    # If not, you might need to load configuration from a separate file
     config = LlamaConfig(**checkpoint_dict["model_args"])
     model = Llama(config)
+
     state_dict = checkpoint_dict["model"]
+
+    # Clean up the state dictionary if needed
     unwanted_prefix = "_orig_mod."
     for k, v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
             state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+
     model.load_state_dict(state_dict, strict=False)
+
+    # Don't forget to move the model to the selected device
+    model.to(device)
+
+    # It's good practice to set the model to evaluation mode if you're not training
+    model.eval()
+
     return model
