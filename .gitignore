@@ -64,3 +64,6 @@ coverage.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# tmp.ipynb
+tmp.ipynb
