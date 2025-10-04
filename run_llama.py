@@ -130,8 +130,16 @@ def save_model(model, optimizer, args, config, filepath):
 	torch.save(save_info, filepath)
 	print(f"save the model to {filepath}")
 
+def get_device(use_gpu_arg):
+    if use_gpu_arg:
+        if torch.backends.mps.is_available():
+            return torch.device('mps')
+        elif torch.cuda.is_available():
+            return torch.device('cuda')
+    return torch.device('cpu')
+
 def train(args):
-	device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+	device = get_device(args.use_gpu)
 	#### Load data
 	# create the data and its corresponding datasets and dataloader
 	tokenizer = Tokenizer(args.max_sentence_len)
@@ -198,8 +206,8 @@ def train(args):
 
 def generate_sentence(args, prefix, outfile, max_new_tokens = 75, temperature = 0.0):
 	with torch.no_grad():
-		device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
-		ctx = torch.amp.autocast(device_type="cuda", dtype=torch.float32) if args.use_gpu else nullcontext()
+		device = get_device(args.use_gpu)
+		ctx = torch.amp.autocast(device_type=device.type, dtype=torch.float32) if args.use_gpu else nullcontext()
 		llama = load_pretrained(args.pretrained_model_path)
 		llama = llama.to(device)
 		print(f"load model from {args.pretrained_model_path}")
@@ -233,7 +241,7 @@ def test_with_prompting(args):
 
 	with torch.no_grad():
 
-		device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+		device = get_device(args.use_gpu)
 		#### Load data
 		# create the data and its corresponding datasets and dataloader
 		tokenizer = Tokenizer(args.max_sentence_len)
@@ -275,7 +283,7 @@ def test(args):
 	assert args.dev_out.endswith("dev-finetuning-output.txt"), 'For saving finetuning results, please set the dev_out argument as "<dataset>-dev-finetuning-output.txt"'
 	assert args.test_out.endswith("test-finetuning-output.txt"), 'For saving finetuning results, please set the test_out argument as "<dataset>-test-finetuning-output.txt"'
 	with torch.no_grad():
-		device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
+		device = get_device(args.use_gpu)
 		saved = torch.load(args.filepath)
 		config = saved['model_config']
 		model = LlamaEmbeddingClassifier(config)
