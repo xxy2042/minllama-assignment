@@ -51,7 +51,9 @@ class PretrainedConfig(object):
         self.num_return_sequences = kwargs.pop("num_return_sequences", 1)
         self.chunk_size_feed_forward = kwargs.pop("chunk_size_feed_forward", 0)
         self.output_scores = kwargs.pop("output_scores", False)
-        self.return_dict_in_generate = kwargs.pop("return_dict_in_generate", False)
+        self.return_dict_in_generate = kwargs.pop(
+            "return_dict_in_generate", False
+        )
         self.forced_bos_token_id = kwargs.pop("forced_bos_token_id", None)
         self.forced_eos_token_id = kwargs.pop("forced_eos_token_id", None)
 
@@ -77,7 +79,9 @@ class PretrainedConfig(object):
         self.eos_token_id = kwargs.pop("eos_token_id", None)
         self.sep_token_id = kwargs.pop("sep_token_id", None)
 
-        self.decoder_start_token_id = kwargs.pop("decoder_start_token_id", None)
+        self.decoder_start_token_id = kwargs.pop(
+            "decoder_start_token_id", None
+        )
 
         # task specific arguments
         self.task_specific_params = kwargs.pop("task_specific_params", None)
@@ -114,7 +118,9 @@ class PretrainedConfig(object):
         return json.loads(text)
 
     @classmethod
-    def from_dict(cls, config_dict: Dict[str, Any], **kwargs) -> "PretrainedConfig":
+    def from_dict(
+        cls, config_dict: Dict[str, Any], **kwargs
+    ) -> "PretrainedConfig":
         return_unused_kwargs = kwargs.pop("return_unused_kwargs", False)
 
         config = cls(**config_dict)
@@ -152,7 +158,9 @@ class PretrainedConfig(object):
 
         pretrained_model_name_or_path = str(pretrained_model_name_or_path)
         if os.path.isdir(pretrained_model_name_or_path):
-            config_file = os.path.join(pretrained_model_name_or_path, CONFIG_NAME)
+            config_file = os.path.join(
+                pretrained_model_name_or_path, CONFIG_NAME
+            )
         elif os.path.isfile(pretrained_model_name_or_path) or is_remote_url(
             pretrained_model_name_or_path
         ):

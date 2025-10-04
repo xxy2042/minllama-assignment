@@ -126,12 +126,20 @@ class Attention(nn.Module):
         query = self.compute_query(x)
         key = self.compute_key(x)
         value = self.compute_value(x)
-        query = query.view(batch_size, seqlen, self.n_local_heads, self.head_dim)
-        key = key.view(batch_size, seqlen, self.n_local_kv_heads, self.head_dim)
-        value = value.view(batch_size, seqlen, self.n_local_kv_heads, self.head_dim)
+        query = query.view(
+            batch_size, seqlen, self.n_local_heads, self.head_dim
+        )
+        key = key.view(
+            batch_size, seqlen, self.n_local_kv_heads, self.head_dim
+        )
+        value = value.view(
+            batch_size, seqlen, self.n_local_kv_heads, self.head_dim
+        )
 
         # RoPE relative positional embeddings
-        query, key = apply_rotary_emb(query, key, self.head_dim, self.max_seq_len)
+        query, key = apply_rotary_emb(
+            query, key, self.head_dim, self.max_seq_len
+        )
 
         # Grouped multiquery attention: expand out keys and values.
         # Convert both to:
@@ -146,7 +154,9 @@ class Attention(nn.Module):
         output = self.compute_query_key_value_scores(query, key, value)
 
         # restore time as batch dimension and concat heads
-        output = output.transpose(1, 2).contiguous().view(batch_size, seqlen, -1)
+        output = (
+            output.transpose(1, 2).contiguous().view(batch_size, seqlen, -1)
+        )
 
         # final projection into the residual stream
         output = self.resid_dropout(self.compute_output(output))
@@ -155,13 +165,19 @@ class Attention(nn.Module):
 
 class FeedForward(nn.Module):
     def __init__(
-        self, dim: int, hidden_dim: int | None, multiple_of: int, dropout: float
+        self,
+        dim: int,
+        hidden_dim: int | None,
+        multiple_of: int,
+        dropout: float,
     ):
         super().__init__()
         if hidden_dim is None:
             hidden_dim = 4 * dim
             hidden_dim = int(2 * hidden_dim / 3)
-            hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
+            hidden_dim = multiple_of * (
+                (hidden_dim + multiple_of - 1) // multiple_of
+            )
         self.w1 = nn.Linear(dim, hidden_dim, bias=False)
         self.w2 = nn.Linear(hidden_dim, dim, bias=False)
         self.w3 = nn.Linear(dim, hidden_dim, bias=False)
@@ -249,7 +265,9 @@ class Llama(LlamaPreTrainedModel):
         self.apply(self._init_weights)
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
-            if pn.endswith("w3.weight") or pn.endswith("compute_output.weight"):
+            if pn.endswith("w3.weight") or pn.endswith(
+                "compute_output.weight"
+            ):
                 torch.nn.init.normal_(
                     p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layers)
                 )
