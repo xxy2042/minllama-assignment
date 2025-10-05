@@ -43,12 +43,18 @@ class AdamW(Optimizer):
         )
         super().__init__(params, defaults)
 
-    def step(self, closure: Callable = None):
+    def step(self, closure: Callable = None):  # type: ignore
         loss = None
         if closure is not None:
             loss = closure()
 
         for group in self.param_groups:
+            # Access hyperparameters from the `group` dictionary
+            beta1, beta2 = group["betas"]
+            lr = group["lr"]
+            weight_decay = group["weight_decay"]
+            eps = group["eps"]
+
             for p in group["params"]:
                 if p.grad is None:
                     continue
@@ -58,23 +64,40 @@ class AdamW(Optimizer):
                         "Adam does not support sparse gradients, please consider SparseAdam instead"
                     )
 
-                raise NotImplementedError()
-
                 # State should be stored in this dictionary
                 state = self.state[p]
 
-                # Access hyperparameters from the `group` dictionary
-                alpha = group["lr"]
+                # State initialization
+                if len(state) == 0:
+                    state["step"] = 0
+                    # Exponential moving average of gradient values
+                    state["exp_avg"] = torch.zeros_like(p.data)
+                    # Exponential moving average of squared gradient values
+                    state["exp_avg_sq"] = torch.zeros_like(p.data)
+
+                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                state["step"] += 1
 
                 # Update first and second moments of the gradients
+                exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
 
                 # Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
+                step = state["step"]
+                bias_correction1 = 1.0 - beta1**step
+                bias_correction2 = 1.0 - beta2**step
+                step_size = lr * (bias_correction2**0.5) / bias_correction1
 
                 # Update parameters
+                p.data.addcdiv_(
+                    exp_avg, exp_avg_sq.sqrt().add_(eps), value=-step_size
+                )
 
                 # Add weight decay after the main gradient-based updates.
                 # Please note that the learning rate should be incorporated into this update.
+                if weight_decay > 0.0:
+                    p.data.add_(p.data, alpha=-weight_decay * lr)
 
         return loss

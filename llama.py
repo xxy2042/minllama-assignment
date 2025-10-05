@@ -121,7 +121,7 @@ class Attention(nn.Module):
         https://ai.plainenglish.io/understanding-llama2-kv-cache-grouped-query-attention-rotary-embedding-and-more-c17e5f49a6d7
         for details.
         """
-        batch_size, seqlen, _ = x.shape
+        batch_size, seqlen, _ = x.shape  # (batch_size, seqlen, dim)
 
         query = self.compute_query(x)
         key = self.compute_key(x)
@@ -151,15 +151,19 @@ class Attention(nn.Module):
         query = query.transpose(1, 2)  # (bs, n_local_heads, seqlen, head_dim)
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
-        output = self.compute_query_key_value_scores(query, key, value)
+        output = self.compute_query_key_value_scores(
+            query, key, value
+        )  # (bs, n_local_heads, seqlen, head_dim)
 
         # restore time as batch dimension and concat heads
         output = (
             output.transpose(1, 2).contiguous().view(batch_size, seqlen, -1)
-        )
+        )  # (bs, seqlen, dim)
 
         # final projection into the residual stream
-        output = self.resid_dropout(self.compute_output(output))
+        output = self.resid_dropout(
+            self.compute_output(output)
+        )  # (bs, seqlen, dim)
         return output
 
 
@@ -191,7 +195,10 @@ class FeedForward(nn.Module):
         return F.silu(self.w1(x)) * self.w3(x)
 
     def forward(self, x):
-        return self.dropout(self.w2(self.SwiGLU(x)))
+        # x: (batch_size, seqlen, dim)
+        return self.dropout(
+            self.w2(self.SwiGLU(x))
+        )  # (batch_size, seqlen, dim)
 
 
 class LlamaLayer(nn.Module):
@@ -226,11 +233,12 @@ class LlamaLayer(nn.Module):
         5) add a residual connection from the unnormalized self-attention output to the
            output of the feed-forward network
         """
-        # todo
-
-        attn_input = self.attention_norm(x)
+        # x: (batch_size, seqlen, dim)
+        attn_input = self.attention_norm(x)  # (batch_size, seqlen, dim)
+        # (batch_size, seqlen, dim)
         attn_output = self.attention(attn_input) + x
-        ffn_input = self.ffn_norm(attn_output)
+        ffn_input = self.ffn_norm(attn_output)  # (batch_size, seqlen, dim)
+        # (batch_size, seqlen, dim)
         ffn_output = self.feed_forward(ffn_input) + attn_output
         return ffn_output
 
@@ -283,17 +291,17 @@ class Llama(LlamaPreTrainedModel):
     def forward(
         self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None
     ) -> tuple[Any, Any]:
-        _batch_size, seqlen = tokens.shape
-        h = self.tok_embeddings(tokens)
+        _batch_size, seqlen = tokens.shape  # (batch_size, seqlen)
+        h = self.tok_embeddings(tokens)  # (batch_size, seqlen, dim)
         h = self.dropout(h)
 
         for layer in self.layers:
-            h = layer(h)
-        h = self.norm(h)
+            h = layer(h)  # (batch_size, seqlen, dim)
+        h = self.norm(h)  # (batch_size, seqlen, dim)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
-            logits = self.output(h)
+            logits = self.output(h)  # (batch_size, seqlen, vocab_size)
         else:
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(
@@ -319,10 +327,12 @@ class Llama(LlamaPreTrainedModel):
                 idx
                 if idx.size(1) <= self.params.max_seq_len
                 else idx[:, -self.params.max_seq_len :]
-            )
+            )  # (b, min(t, max_seq_len))
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :]  # crop to just the final time step
+            logits, _ = self(idx_cond)  # (b, 1, vocab_size)
+            logits = logits[
+                :, -1, :
+            ]  # crop to just the final time step (b, vocab_size)
 
             if temperature == 0.0:
                 # select the single most likely index
@@ -339,9 +349,9 @@ class Llama(LlamaPreTrainedModel):
                 """
                 scaled_logits = logits / temperature
                 prob = F.softmax(scaled_logits, dim=-1)
-                idx_next = torch.multinomial(prob, 1)
+                idx_next = torch.multinomial(prob, 1)  # (b, 1)
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+            idx = torch.cat((idx, idx_next), dim=1)  # (b, t+1)
 
         return idx
 
